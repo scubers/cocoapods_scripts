@@ -1,1 +1,1 @@
-config_pod(:name => "Puyopuyo", :branch => "master")
+config_pod(:name => "Puyopuyo", :branch => "refact")
