@@ -56,7 +56,10 @@ end
 
 def pod_config(git, branch, force = false)
   path = "../_pod_config"
-  if force || !Dir.exist?(path)
+  if force
+    `rm -rf #{path}`
+  end
+  if !Dir.exist?(path)
     `git clone #{git} -b #{branch} #{path}`
   end
   config_path = "../_pod_config/PodConfig.rb"
