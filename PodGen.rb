@@ -93,8 +93,6 @@ class PodDesc
   def git_clone_at(git, folder, branch)
     if !Dir.exist?(folder)
       `git clone #{git} -b #{branch} #{folder}`
-    else
-      puts "folder exists #{folder}"
     end
   end
 
