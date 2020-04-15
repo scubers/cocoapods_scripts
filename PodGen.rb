@@ -1,59 +1,129 @@
-$gen_pod_intercepter = {}
+$gen_pod_env = {}
 
-def config_pod(props)
-  $gen_pod_intercepter[props[:name]] = props[:branch]
-end
+$dev_folders = {}
 
-def get_config_branch(name)
-  return $gen_pod_intercepter[name]
-end
+$extra_config = {}
 
-def gen_pod(config)
-  branch = config[:branch]
-  git = config[:git]
-  path = config[:path]
-  tag = config[:tag]
-  version = config[:version]
-  name = config[:name]
-  specs = config[:subspecs]
+class ExtraConfig
+  attr_accessor :name, :action
 
-  cover_branch = get_config_branch(name)
-  if !cover_branch.blank?
-    # 覆盖branch
-    puts "cover_branch<#{name}>: #{cover_branch}"
-    branch = cover_branch
+  def initialize(name, action)
+    @name = name
+    @action = action
   end
 
-  expr = "pod '#{name}'"
+  def config(config)
+    if name == config[:name]
+      @action.call(config)
+    end
+  end
+end
 
-  if !path.blank?
-    expr += ", :path => '#{path}'"
-  elsif !version.blank?
-    expr += ", '#{version}'"
-  elsif !tag.blank?
-    expr += ", :git => '#{git}', :tag => '#{tag}'"
-  elsif !branch.blank?
-    expr += ", :git => '#{git}', :branch => '#{branch}'"
+class PodDesc
+  attr_accessor :name, :props
+
+  def initialize(name, props)
+    config = props
+    extra_config = $extra_config[name]
+    if !extra_config.nil?
+      # puts extra_config
+      extra_config.config(config)
+    end
+    @name = name; @props = config
   end
 
-  if !specs.blank?
-    temp = specs
-    subs = temp.split(",")
+  def name() return @props[:name]; end
+  def branch() return @props[:branch]; end
+  def git() return @props[:git]; end
+  def path() return @props[:path]; end
+  def tag() return @props[:tag]; end
+  def version() return @props[:version]; end
+  def subspecs() return @props[:subspecs]; end
 
-    subspecs = ""
-    subs.each do |sub|
-      presub = sub.lstrip().rstrip()
-      if presub.length() > 0
-        subspecs += "'#{presub}',"
-      end
+  # dev_属性
+  def dev_folder() return @props[:dev_folder]; end
+
+  # get code
+  def get_pod_code()
+    expr = "pod '#{name}'"
+    if !path.nil?
+      expr += ", :path => '#{path}'"
+    elsif !dev_folder.nil? and !$dev_folders[dev_folder].nil?
+      expr += ", :path => '../#{dev_folder}'"
+    elsif !version.nil?
+      expr += ", '#{version}'"
+    elsif !tag.nil?
+      expr += ", :git => '#{git}', :tag => '#{tag}'"
+    elsif !branch.nil?
+      expr += ", :git => '#{git}', :branch => '#{branch}'"
     end
 
-    expr = expr + ", :subspecs => [#{subspecs}]"
+    if !subspecs.nil?
+      temp = subspecs
+      subs = temp.split(",")
+
+      subspecs_desc = ""
+      subs.each do |sub|
+        presub = sub.lstrip().rstrip()
+        if presub.length() > 0
+          subspecs_desc += "'#{presub}',"
+        end
+      end
+
+      expr += ", :subspecs => [#{subspecs_desc}]"
+    end
+
+    # if !folder.blank?
+    #   git_clone_at(git, folder, branch)
+    # end
+    puts expr
+    return expr
   end
-  puts expr
-  eval(expr)
+
+  # methos
+  def deal_dev_folder()
+    if !dev_folder.nil? and !$dev_folders[dev_folder].nil?
+      ctx = $dev_folders[dev_folder]
+      git = ctx[:git]
+      branch = ctx[:branch]
+      git_clone_at(git, "../#{dev_folder}", branch)
+    end
+  end
+
+  def git_clone_at(git, folder, branch)
+    if !Dir.exist?(folder)
+      `git clone #{git} -b #{branch} #{folder}`
+    else
+      puts "folder exists #{folder}"
+    end
+  end
+
+  # 开始生成pod
+  def gen_pod()
+    deal_dev_folder()
+    return get_pod_code()
+  end
 end
 
+def cover_config(name)
+  $extra_config[name] = ExtraConfig.new(name, Proc.new { |x|
+    yield x
+  })
+end
+
+# 声明pods
+def gen_pod(config)
+  desc = PodDesc.new(config[:name], config)
+  code = desc.gen_pod()
+  eval(code)
+end
+
+# 配置文件声明开发文件夹
+def dev_folder(name, git, branch = "master")
+  $dev_folders[name] = { :git => git, :branch => branch }
+end
+
+# 声明配置文件地址
 def pod_config(git, branch, force = false)
   path = "../_pod_config"
   if force
@@ -67,4 +137,9 @@ def pod_config(git, branch, force = false)
     content = File.read(config_path)
     eval(content)
   end
+end
+
+# 全局变量
+def gen_pod_env(props)
+  $gen_pod_env = props
 end
